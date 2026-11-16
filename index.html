@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scrub – Data Cleaning for ML</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light;--bg:#eef1f4;--card:#fff;--tx:#14202b;--mu:#5d6b78;--bd:#d6dce2;--ac:#0f766e;--acx:#fff;--na:#fde7b0;--nat:#7a4a00;--ok:#15803d;--er:#b42318}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0f161d;--card:#18222c;--tx:#e8edf2;--mu:#93a1ae;--bd:#2a3743;--ac:#2dd4bf;--acx:#0b1a18;--na:#4a3608;--nat:#ffd479;--ok:#4ade80;--er:#ff8a7a}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0f161d;--card:#18222c;--tx:#e8edf2;--mu:#93a1ae;--bd:#2a3743;--ac:#2dd4bf;--acx:#0b1a18;--na:#4a3608;--nat:#ffd479;--ok:#4ade80;--er:#ff8a7a}
+*{box-sizing:border-box}html{height:100%}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--tx);font:16px/1.5 "Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif}
+header{padding:20px 20px 0;max-width:1060px;margin:0 auto}
+h1{font-size:28px;font-weight:800;margin:0;letter-spacing:-.02em}
+header p{margin:2px 0 0;color:var(--mu)}
+.app{display:grid;grid-template-columns:200px 1fr;gap:20px;max-width:1060px;margin:0 auto;padding:20px}
+nav ol{list-style:none;margin:0;padding:0;position:sticky;top:12px}
+nav li{display:flex;gap:10px;align-items:center;padding:9px 10px;border-radius:8px;color:var(--mu);font-weight:600}
+nav li b{width:26px;height:26px;border-radius:50%;border:2px solid var(--bd);display:grid;place-items:center;font-size:13px;flex:none}
+nav li.on{color:var(--tx);background:var(--card)}nav li.on b{background:var(--ac);border-color:var(--ac);color:var(--acx)}
+nav li.done b{border-color:var(--ok);color:var(--ok)}
+main{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:24px;min-width:0}
+h2{margin:0 0 4px;font-size:22px;font-weight:800}.sub{color:var(--mu);margin:0 0 18px}
+.drop{border:2px dashed var(--bd);border-radius:12px;padding:34px 16px;text-align:center;cursor:pointer}
+.drop:hover,.drop.over{border-color:var(--ac);background:var(--bg)}
+button,select{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--bd);background:var(--card);border-radius:8px;padding:8px 14px;font-weight:600}
+button.p{background:var(--ac);color:var(--acx);border-color:var(--ac)}button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible,select:focus-visible,.opt:focus-within,.drop:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+select{background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:6px 8px;max-width:100%}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.opt{border:2px solid var(--bd);border-radius:10px;padding:12px;cursor:pointer;display:block}
+.opt input{position:absolute;opacity:0}.opt.sel{border-color:var(--ac);background:var(--bg)}
+.opt small{display:block;color:var(--mu)}
+.scroll{overflow-x:auto;border:1px solid var(--bd);border-radius:10px;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:6px 10px;text-align:left;border-bottom:1px solid var(--bd);white-space:nowrap}
+th{background:var(--bg)}td.na{background:var(--na);color:var(--nat)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0}
+.bar{display:flex;justify-content:space-between;margin-top:22px;gap:10px}
+.tag{font-size:12px;border:1px solid var(--bd);border-radius:20px;padding:1px 8px;color:var(--mu)}
+.stat{display:flex;gap:22px;flex-wrap:wrap;margin:8px 0}.stat div{font-size:13px;color:var(--mu)}.stat b{display:block;font-size:26px;color:var(--tx)}
+.err{color:var(--er);font-weight:600}.ok{color:var(--ok);font-weight:600}
+ul.log{padding-left:18px;color:var(--mu)}
+@media (max-width:760px){.app{grid-template-columns:1fr;padding:12px}nav ol{display:flex;gap:4px;overflow-x:auto;position:static}nav li span{display:none}nav li.on span{display:inline}nav li{flex:none}main{padding:16px}}
+</style></head><body>
+<header><h1>Scrub</h1><p>Clean a dataset for machine learning in six steps.</p></header>
+<div class="app"><nav><ol id="nav"></ol></nav><main id="main"></main></div>
+<script>
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const miss=v=>v===null||v===undefined||(typeof v==='string'&&/^(|na|n\/a|nan|null|none)$/i.test(v.trim()));
+const STEPS=['Upload','Model','Output column','Clean','Merge','Download'];
+const MODELS=[['Linear Regression','Predicts a number'],['Logistic Regression','Predicts a category'],['Decision Tree','Number or category'],['Random Forest','Number or category'],['Gradient Boosting','Number or category'],['SVM','Number or category'],['KNN','Number or category'],['K-Means Clustering','No output column needed']];
+const S={step:0,rows:[],cols:[],info:{},file:'',model:null,target:null,strat:{},dedupe:true,method:'mean',clean:null,out:null,msg:''};
+const unsup=()=>S.model==='K-Means Clustering';
+
+function analyze(){S.info={};S.cols.forEach(c=>{const v=S.rows.map(r=>r[c]),nv=v.filter(x=>!miss(x));
+ const num=nv.length>0&&nv.filter(x=>!isNaN(Number(x))).length/nv.length>=.9;
+ const m=num?v.filter(x=>miss(x)||isNaN(Number(x))).length:v.length-nv.length;
+ S.info[c]={num,miss:m};S.strat[c]=m?(num?S.method:'mode'):'keep'})}
+
+async function load(f){S.msg='';try{
+ const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
+ const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:null});
+ if(!rows.length)throw Error('The file has no data rows.');
+ setData(rows,f.name)}catch(e){S.msg='Could not read that file: '+e.message;render()}}
+function setData(rows,name){const cs=new Set();rows.forEach(r=>Object.keys(r).forEach(k=>cs.add(k)));
+ S.rows=rows;S.cols=[...cs];S.file=name;S.target=null;S.clean=S.out=null;S.strat={};analyze();render()}
+function sample(){let s=7;const r=()=>(s=(s*9301+49297)%233280)/233280;const cities=['Pune','Mumbai','Nashik','Nagpur'];
+ const rows=Array.from({length:40},(_,i)=>{const age=20+Math.floor(r()*50);return{age:r()<.15?null:age,income:r()<.2?null:Math.round(20000+r()*80000),city:r()<.15?null:cities[Math.floor(r()*4)],glucose:r()<.1?'':Math.round(70+r()*90),outcome:r()<.05?null:(r()<.4?1:0)}});
+ rows.push({...rows[0]});setData(rows,'sample.csv')}
+
+function runClean(){let rows=S.rows.map(r=>({...r})),log=[],cols=S.cols.filter(c=>c!==S.target);
+ cols.forEach(c=>rows.forEach(r=>{const v=r[c];r[c]=S.info[c].num?(miss(v)||isNaN(Number(v))?null:Number(v)):(miss(v)?null:v)}));
+ if(S.target)rows.forEach(r=>{if(miss(r[S.target]))r[S.target]=null});
+ if(S.dedupe){const seen=new Set(),b=rows.length;rows=rows.filter(r=>{const k=JSON.stringify(S.cols.map(c=>r[c]));return seen.has(k)?false:(seen.add(k),true)});log.push(`Removed ${b-rows.length} duplicate rows`)}
+ if(S.target){const b=rows.length;rows=rows.filter(r=>r[S.target]!==null);log.push(`Removed ${b-rows.length} rows with no value in “${S.target}”`)}
+ cols=cols.filter(c=>S.strat[c]!=='dropcol'||(log.push(`Dropped column “${c}”`),false));
+ cols.forEach(c=>{if(S.strat[c]==='droprow'){const b=rows.length;rows=rows.filter(r=>r[c]!==null);log.push(`“${c}”: removed ${b-rows.length} rows with missing values`)}});
+ cols.forEach(c=>{const st=S.strat[c];if(['keep','droprow'].includes(st))return;
+  const vals=rows.map(r=>r[c]).filter(x=>x!==null);let fill;
+  if(st==='mean'&&vals.length)fill=+(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(4);
+  else if(st==='median'&&vals.length){const s=[...vals].sort((a,b)=>a-b),m=s.length>>1;fill=s.length%2?s[m]:(s[m-1]+s[m])/2}
+  else if(st==='mode'&&vals.length){const t=new Map();vals.forEach(x=>t.set(x,(t.get(x)||0)+1));fill=[...t].sort((a,b)=>b[1]-a[1])[0][0]}
+  else if(st==='zero')fill=0;else if(st==='unknown')fill='Unknown';
+  if(fill===undefined)return;let n=0;rows.forEach(r=>{if(r[c]===null){r[c]=fill;n++}});if(n)log.push(`“${c}”: filled ${n} values with ${st==='zero'?'0':st==='unknown'?'“Unknown”':st+' ('+fill+')'}`)});
+ S.clean={rows,cols,log};S.out=null}
+
+function merge(){const cols=[...S.clean.cols,...(S.target?[S.target]:[])];
+ S.out={cols,rows:S.clean.rows.map(r=>Object.fromEntries(cols.map(c=>[c,r[c]])))};render()}
+
+const tbl=(rows,cols,n=8)=>`<div class="scroll"><table><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr>${rows.slice(0,n).map(r=>`<tr>${cols.map(c=>miss(r[c])?'<td class="na">empty</td>':`<td>${esc(r[c])}</td>`).join('')}</tr>`).join('')}</table></div>`;
+const totalMiss=(rows,cols)=>rows.reduce((a,r)=>a+cols.filter(c=>miss(r[c])).length,0);
+
+function view(){
+ if(S.step===0)return `<h2>Upload your data</h2><p class="sub">CSV or Excel (.xlsx, .xls). The first sheet is used and the first row must be column names.</p>
+ <div class="drop" id="drop" tabindex="0" role="button"><b>Drop a file here or click to browse</b><br><span class="sub">Your data stays in your browser.</span></div>
+ <input type="file" id="file" accept=".csv,.xlsx,.xls" hidden>
+ <div class="row"><button onclick="sample()">Try sample data</button></div>
+ ${S.msg?`<p class="err">${esc(S.msg)}</p>`:''}
+ ${S.rows.length?`<p class="ok">Loaded ${esc(S.file)}: ${S.rows.length} rows, ${S.cols.length} columns, ${totalMiss(S.rows,S.cols)} empty cells (highlighted).</p>${tbl(S.rows,S.cols)}`:''}`;
+ if(S.step===1)return `<h2>Choose the model you will train</h2><p class="sub">This decides whether you need an output column.</p><div class="grid">${MODELS.map(([n,d],i)=>`<label class="opt ${S.model===n?'sel':''}"><input type="radio" name="m" value="${i}" ${S.model===n?'checked':''}><b>${n}</b><small>${d}</small></label>`).join('')}</div>`;
+ if(S.step===2)return `<h2>Select the output column</h2><p class="sub">${unsup()?'K-Means finds groups on its own, so an output column is optional.':'This is the value your model learns to predict. Rows where it is empty are removed.'}</p>
+ <div class="grid">${S.cols.map((c,i)=>`<label class="opt ${S.target===c?'sel':''}"><input type="radio" name="t" value="${i}" ${S.target===c?'checked':''}><b>${esc(c)}</b><small>${S.info[c].num?'number':'text'} · ${S.info[c].miss} empty</small></label>`).join('')}</div>
+ ${unsup()?`<div class="row"><button onclick="S.target=null;render()">No output column</button></div>`:''}`;
+ if(S.step===3){const feats=S.cols.filter(c=>c!==S.target);
+  const opts=c=>(S.info[c].num?[['mean','Fill with mean'],['median','Fill with median'],['mode','Fill with mode'],['zero','Fill with 0']]:[['mode','Fill with mode'],['unknown','Fill with “Unknown”']]).concat([['droprow','Drop rows with gaps'],['dropcol','Drop column'],['keep','Leave as is']]);
+  return `<h2>Clean the data</h2><p class="sub">Pick how to fill the gaps in each column, or set a whole group at once.</p>
+  <div class="row"><b>Method for all columns:</b>${['mean','median','mode'].map(s=>`<button class="${S.method===s?'p':''}" onclick="setMethod('${s}')">${s[0].toUpperCase()+s.slice(1)}</button>`).join('')}</div><p class="sub">Mean and median only work on number columns, so text columns use mode. You can still change any single column in the table below.</p>
+  <label class="row"><input type="checkbox" ${S.dedupe?'checked':''} onchange="S.dedupe=this.checked"> Remove duplicate rows</label>
+  <div class="scroll"><table><tr><th>Column</th><th>Type</th><th>Empty</th><th>Strategy</th></tr>${feats.map(c=>{const i=S.cols.indexOf(c);return `<tr><td>${esc(c)}</td><td><span class="tag">${S.info[c].num?'number':'text'}</span></td><td>${S.info[c].miss}</td><td><select data-c="${i}">${opts(c).map(([v,l])=>`<option value="${v}" ${S.strat[c]===v?'selected':''}>${l}</option>`).join('')}</select></td></tr>`}).join('')}</table></div>`}
+ if(S.step===4)return `<h2>Merge the cleaned data</h2><p class="sub">Combine the cleaned feature columns with the output column into one table.</p>
+ ${S.clean.log.length?`<ul class="log">${S.clean.log.map(l=>`<li>${esc(l)}</li>`).join('')}</ul>`:''}
+ <div class="stat"><div><b>${S.clean.rows.length}</b>rows after cleaning</div><div><b>${S.clean.cols.length}</b>feature columns</div><div><b>${S.target?esc(S.target):'none'}</b>output column</div></div>
+ ${S.out?`<p class="ok">Merged: ${S.out.rows.length} rows, ${S.out.cols.length} columns, ${totalMiss(S.out.rows,S.out.cols)} empty cells left.</p>${tbl(S.out.rows,S.out.cols)}`:`<button class="p" onclick="merge()">Merge cleaned data</button>`}`;
+ return `<h2>Download your clean data</h2><p class="sub">${S.out.rows.length} rows, ${S.out.cols.length} columns, ready for ${esc(S.model)}.</p>${tbl(S.out.rows,S.out.cols,6)}
+ <div class="row"><button class="p" onclick="dl('csv')">Download CSV</button><button onclick="dl('xlsx')">Download Excel</button><button onclick="restart()">Start over</button></div><p id="dm" class="sub" role="status"></p>`}
+
+function setMethod(s){S.method=s;S.cols.forEach(c=>{if(c!==S.target&&S.info[c].miss)S.strat[c]=S.info[c].num?s:'mode'});render()}
+function restart(){Object.assign(S,{step:0,rows:[],cols:[],info:{},file:'',model:null,target:null,strat:{},clean:null,out:null,msg:''});render()}
+function dl(kind){const m=$('#dm');
+ const ws=XLSX.utils.json_to_sheet(S.out.rows,{header:S.out.cols}),base=S.file.replace(/\.[^.]+$/,'')+'_clean';
+ let blob;if(kind==='csv')blob=new Blob([XLSX.utils.sheet_to_csv(ws)],{type:'text/csv;charset=utf-8'});
+ else{const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'clean');blob=new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=base+'.'+kind;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);m.textContent='Downloaded '+base+'.'+kind}
+
+function can(){return S.step===0?S.rows.length>0:S.step===1?!!S.model:S.step===2?(!!S.target||unsup()):S.step===3?true:S.step===4?!!S.out:false}
+function go(d){if(d>0&&S.step===3)runClean();if(d>0&&S.step===2&&S.step+d===3)S.clean=null;S.step+=d;render();scrollTo(0,0)}
+function render(){
+ $('#nav').innerHTML=STEPS.map((s,i)=>`<li class="${i===S.step?'on':i<S.step?'done':''}"><b>${i<S.step?'✓':i+1}</b><span>${s}</span></li>`).join('');
+ $('#main').innerHTML=view()+`<div class="bar"><button ${S.step?'':'disabled'} onclick="go(-1)">Back</button>${S.step<5?`<button class="p" ${can()?'':'disabled'} onclick="go(1)">${S.step===3?'Clean and continue':'Next'}</button>`:'<span></span>'}</div>`;
+ const dz=$('#drop'),fi=$('#file');
+ if(dz){dz.onclick=()=>fi.click();dz.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fi.click()}};fi.onchange=()=>fi.files[0]&&load(fi.files[0]);
+  dz.ondragover=e=>{e.preventDefault();dz.classList.add('over')};dz.ondragleave=()=>dz.classList.remove('over');dz.ondrop=e=>{e.preventDefault();dz.classList.remove('over');e.dataTransfer.files[0]&&load(e.dataTransfer.files[0])}}
+ document.querySelectorAll('input[name=m]').forEach(i=>i.onchange=()=>{S.model=MODELS[i.value][0];if(!unsup()&&false)S.target=null;render()});
+ document.querySelectorAll('input[name=t]').forEach(i=>i.onchange=()=>{S.target=S.cols[i.value];render()});
+ document.querySelectorAll('select[data-c]').forEach(s=>s.onchange=()=>{S.strat[S.cols[s.dataset.c]]=s.value})}
+render();
+</script></body></html>
